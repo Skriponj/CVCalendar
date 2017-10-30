@@ -9,6 +9,13 @@
 import UIKit
 
 public final class CVCalendarDayViewControlCoordinator {
+    
+    fileprivate enum RadiusSide {
+        case right
+        case left
+        case round
+    }
+    
     // MARK: - Non public properties
     fileprivate var selectionSet = Set<DayView>()
     fileprivate unowned let calendarView: CalendarView
@@ -58,6 +65,9 @@ extension CVCalendarDayViewControlCoordinator {
 private extension CVCalendarDayViewControlCoordinator {
     
     func presentSelectionOnDayView(_ dayView: DayView) {
+        if selectionSet.count == 1 {
+            animator.selectWithRoundShape = true
+        }
         animator.animateSelectionOnDayView(dayView)
         //animator?.animateSelection(dayView, withControlCoordinator: self)
     }
@@ -111,6 +121,8 @@ extension CVCalendarDayViewControlCoordinator {
             let currentlySelectedDate = dayView.date.convertedDate(calendar: calendar),
             selectionSet.count == 1 {
             
+            animator.selectWithRoundShape = false
+            
             //prevent selection of same day twice for range
             if previouslySelectedDayView === dayView {
                 return
@@ -126,8 +138,19 @@ extension CVCalendarDayViewControlCoordinator {
                 self.calendarView.delegate?.didSelectRange?(from: dayView, to: previouslySelectedDayView)
             }
             
+            if selectedStartDayView?.calendarView == nil {
+                selectedStartDayView?.weekView = dayView.weekView
+            } else if selectedEndDayView?.calendarView == nil {
+                selectedEndDayView?.weekView = dayView.weekView
+            }
+            
             selectionSet.insert(dayView)
             highlightSelectedDays(in: dayView.monthView)
+            
+            dayViewCornerRadius(for: selectedStartDayView!, radiusSide: RadiusSide.left)
+            dayViewCornerRadius(for: selectedEndDayView!, radiusSide: RadiusSide.right)
+            
+            configureLastAndFirstMonthDays(monthView: dayView.monthView)
             
             return
         }
@@ -142,12 +165,25 @@ extension CVCalendarDayViewControlCoordinator {
         let endDate = selectedEndDayView?.date.convertedDate(calendar: calendar)
         
         monthView.mapDayViews { dayView in
+            
+            dayView.layer.mask = nil
+            
+            for week in monthView.weekViews {
+                if dayView === week.dayViews.last {
+                    dayViewCornerRadius(for: dayView, radiusSide: RadiusSide.right)
+                }
+                if dayView === week.dayViews.first {
+                    dayViewCornerRadius(for: dayView, radiusSide: RadiusSide.left)
+                }
+            }
+            
             guard let currDate = dayView.date.convertedDate(calendar: calendar) else {
                 return
             }
             
             if let startDate = startDate,
                 currDate.compare(startDate) == .orderedSame {
+                dayViewCornerRadius(for: dayView, radiusSide: RadiusSide.left)
                 presentSelectionOnDayView(dayView)
                 return
             }
@@ -161,10 +197,12 @@ extension CVCalendarDayViewControlCoordinator {
             
             if let endDate = endDate,
                 currDate.compare(endDate) == .orderedSame {
+                dayViewCornerRadius(for: dayView, radiusSide: RadiusSide.right)
                 presentSelectionOnDayView(dayView)
                 return
             }
         }
+        configureLastAndFirstMonthDays(monthView: monthView)
     }
     
     public func disableDays(in monthView: MonthView) {
@@ -185,6 +223,8 @@ extension CVCalendarDayViewControlCoordinator {
 private extension CVCalendarDayViewControlCoordinator {
     
     func select(dayView: DayView) {
+        dayView.layer.mask = nil
+        animator.selectWithRoundShape = true
         selectedStartDayView = dayView
         selectionSet.insert(dayView)
         presentSelectionOnDayView(dayView)
@@ -202,16 +242,6 @@ private extension CVCalendarDayViewControlCoordinator {
             }
             
             if compareDatesByDay(calendar: calendar, first: currDate, second: calendarView.earliestSelectableDate, ordering: .orderedAscending) {
-                disableUserInteraction(for: dayView)
-                return
-            }
-            
-            if compareDatesByDay(calendar: calendar, first: currDate, second: beforeDate, ordering: .orderedAscending) {
-                disableUserInteraction(for: dayView)
-                return
-            }
-            
-            if compareDatesByDay(calendar: calendar, first: currDate, second: afterDate, ordering: .orderedDescending) || compareDatesByDay(calendar: calendar, first: currDate, second: afterDate, ordering: .orderedSame) {
                 disableUserInteraction(for: dayView)
                 return
             }
@@ -263,3 +293,76 @@ private extension CVCalendarDayViewControlCoordinator {
         }
     }
 }
+
+// MARK: day view heighlights
+extension CVCalendarDayViewControlCoordinator {
+    func configureLastAndFirstMonthDays(monthView: MonthView) {
+        if let firstDayInMonth = monthView.weekViews.first?.firstMonthDay() {
+            dayViewCornerRadius(for: firstDayInMonth, radiusSide: RadiusSide.left)
+            
+            if firstDayInMonth == monthView.weekViews.first?.dayViews.last {
+                roundDayViewHighlight(for: firstDayInMonth)
+            }
+            
+            if firstDayInMonth.date.month == selectedEndDayView?.date.month &&
+                firstDayInMonth.date.day == selectedEndDayView?.date.day &&
+                firstDayInMonth.date.year == selectedEndDayView?.date.year {
+                roundDayViewHighlight(for: firstDayInMonth)
+            }
+        }
+        if let lastDayInMonth = monthView.weekViews.last?.lastMonthDay() {
+            dayViewCornerRadius(for: lastDayInMonth, radiusSide: RadiusSide.right)
+            
+            if lastDayInMonth == monthView.weekViews.last?.dayViews.first {
+                roundDayViewHighlight(for: lastDayInMonth)
+            }
+            
+            if lastDayInMonth.date.month == selectedStartDayView?.date.month &&
+                lastDayInMonth.date.day == selectedStartDayView?.date.day &&
+                lastDayInMonth.date.year == selectedStartDayView?.date.year {
+                roundDayViewHighlight(for: lastDayInMonth)
+            }
+        }
+    }
+    
+    func roundDayViewHighlight(for dayView: CVCalendarDayView) {
+        dayView.layer.mask = nil
+        dayViewCornerRadius(for: dayView, radiusSide: RadiusSide.round)
+    }
+    
+    fileprivate func dayViewCornerRadius(for dayView: DayView, radiusSide: RadiusSide) {
+        if dayView.selectionView == nil {
+            let selectionView = CVAuxiliaryView(dayView: dayView, rect: dayView.dayLabel.bounds, shape: CVShape.rect)
+            dayView.selectionView = selectionView
+        }
+        let rect = dayView.selectionView!.rectPath().bounds
+        let radius = rect.height / 2
+        let rectShape = CAShapeLayer()
+        rectShape.bounds = dayView.bounds
+        rectShape.position = (dayView.selectionView?.center)!
+        switch radiusSide {
+        case .left:
+            rectShape.path = leftCornerHighlightRadius(for: rect, withRadius: radius)
+        case .right:
+            rectShape.path = rightCornerHighlightRadius(for: rect, withRadius: radius)
+        case .round:
+            rectShape.path = roundCornerRadius(for: rect, withRadius: radius)
+        }
+        dayView.layer.mask = rectShape
+    }
+    
+    func leftCornerHighlightRadius(for rect: CGRect, withRadius radius: CGFloat) -> CGPath {
+        return UIBezierPath(roundedRect: rect, byRoundingCorners: [.bottomLeft , .topLeft],
+                            cornerRadii: CGSize(width: radius, height: radius)).cgPath
+    }
+    
+    func rightCornerHighlightRadius(for rect: CGRect, withRadius radius: CGFloat) -> CGPath {
+        return UIBezierPath(roundedRect: rect, byRoundingCorners: [.bottomRight , .topRight],
+                            cornerRadii: CGSize(width: radius, height: radius)).cgPath
+    }
+    
+    func roundCornerRadius(for rect: CGRect, withRadius radius: CGFloat) -> CGPath {
+        return UIBezierPath(roundedRect: rect, cornerRadius: radius).cgPath
+    }
+}
+

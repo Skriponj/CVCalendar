@@ -170,9 +170,9 @@ extension CVCalendarDayView {
             let coordinator = calendarView.coordinator
             if coordinator?.selectedDayView == nil && calendarView.shouldAutoSelectDayOnMonthChange {
                 let touchController = calendarView.touchController
-                touchController?.receiveTouchOnDayView(self)
-                calendarView.didSelectDayView(self)
-                color = appearance?.dayLabelPresentWeekdaySelectedTextColor
+                //                touchController?.receiveTouchOnDayView(self)
+                //                calendarView.didSelectDayView(self)
+                //                color = appearance?.dayLabelPresentWeekdaySelectedTextColor
             } else {
                 color = appearance?.dayLabelPresentWeekdayTextColor
                 if (appearance?.dayLabelPresentWeekdayInitallyBold!)! {
@@ -418,7 +418,7 @@ extension CVCalendarDayView {
 
 extension CGFloat {
     public func toRadians() -> CGFloat {
-      return CGFloat(self) * CGFloat(Double.pi / 180)
+        return CGFloat(self) * CGFloat(Double.pi / 180)
     }
     
     public func toDegrees() -> CGFloat {
@@ -535,6 +535,7 @@ extension CVCalendarDayView {
         if let selectionView = selectionView , selectionView.frame != dayLabel.bounds {
             selectionView.frame = dayLabel.bounds
         } else {
+            
             selectionView = CVAuxiliaryView(dayView: self, rect: dayLabel.bounds, shape: shape)
         }
         
@@ -629,7 +630,7 @@ extension CVCalendarDayView {
         for object in objects {
             if object == nil {
                 if collapsing {
-                  fatalError("Object { \(String(describing: object)) } must not be nil!")
+                    fatalError("Object { \(String(describing: object)) } must not be nil!")
                 } else {
                     return
                 }
@@ -639,3 +640,4 @@ extension CVCalendarDayView {
         block()
     }
 }
+
